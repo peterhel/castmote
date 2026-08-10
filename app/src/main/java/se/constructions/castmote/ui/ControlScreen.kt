@@ -1,28 +1,55 @@
 package se.constructions.castmote.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.SmartDisplay
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import se.constructions.castmote.controller.MediaStatus
 import se.constructions.castmote.controller.ReceiverStatus
@@ -39,6 +66,8 @@ internal fun formatSkip(seconds: Int): String {
         else -> "${m}m${s}s"
     }
 }
+
+private val SKIP_STEPS = listOf(30, 60, 300, 600, 1200) // 30s · 1m · 5m · 10m · 20m
 
 @Composable
 fun ControlScreen(
@@ -63,112 +92,181 @@ fun ControlScreen(
     onYouTubeSignOut: () -> Unit,
 ) {
     var url by remember { mutableStateOf("") }
-    var skipSeconds by remember { mutableStateOf(30f) } // skip step chosen by the slider, 30s..20min
+    var skipSeconds by remember { mutableIntStateOf(30) } // step chosen by the chips
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        OutlinedButton(onClick = onBack) { Text("‹ Devices") }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        OutlinedButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Devices")
+        }
+
         if (!online) {
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Disconnected", color = MaterialTheme.colorScheme.error)
-                Button(onClick = onReconnect) { Text("Reconnect") }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Disconnected", color = MaterialTheme.colorScheme.onErrorContainer)
+                    Button(onClick = onReconnect) { Text("Reconnect") }
+                }
             }
         }
-        Text(device.friendlyName, style = MaterialTheme.typography.headlineSmall)
-        Text(
-            receiver?.displayName?.let { "App: $it" } ?: "No app running",
-            style = MaterialTheme.typography.bodyMedium,
-        )
 
-        Text(
-            media?.let { "${it.title ?: it.contentId ?: "Media"} — ${it.playerState}" } ?: "Nothing playing",
-            Modifier.padding(top = 8.dp),
-        )
+        // ── Now playing ──────────────────────────────────────────────────────
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(device.friendlyName, style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    receiver?.displayName?.let { "App: $it" } ?: "No app running",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
-        if (media != null) {
-            SeekBar(
-                currentTime = media.currentTime,
-                duration = media.duration,
-                isPlaying = media.playerState == "PLAYING",
-                onSeek = onSeek,
-                modifier = Modifier.padding(top = 8.dp),
-            )
+                if (media != null) {
+                    Text(
+                        "${media.title ?: media.contentId ?: "Media"} — ${media.playerState}",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    SeekBar(
+                        currentTime = media.currentTime,
+                        duration = media.duration,
+                        isPlaying = media.playerState == "PLAYING",
+                        onSeek = onSeek,
+                    )
+                } else {
+                    Text(
+                        "Nothing playing — open the Browser tab or paste a URL below.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                // Transport: Play/Pause is the hero; Stop is secondary.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val playing = media?.playerState == "PLAYING"
+                    FilledIconButton(onClick = onPlayPause, modifier = Modifier.size(64.dp)) {
+                        Icon(
+                            if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (playing) "Pause" else "Play",
+                            Modifier.size(32.dp),
+                        )
+                    }
+                    OutlinedIconButton(onClick = onStopMedia, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Stop, contentDescription = "Stop")
+                    }
+                }
+
+                // Skip step: ‹ back — chips — forward ›. Buttons seek by the selected step.
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    FilledTonalIconButton(onClick = {
+                        onSeek(((media?.currentTime ?: 0.0) - skipSeconds).coerceAtLeast(0.0))
+                    }) { Icon(Icons.Default.FastRewind, contentDescription = "Skip back") }
+
+                    Row(
+                        Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        SKIP_STEPS.forEach { step ->
+                            FilterChip(
+                                selected = skipSeconds == step,
+                                onClick = { skipSeconds = step },
+                                label = { Text(formatSkip(step)) },
+                            )
+                        }
+                    }
+
+                    FilledTonalIconButton(onClick = {
+                        onSeek((media?.currentTime ?: 0.0) + skipSeconds)
+                    }) { Icon(Icons.Default.FastForward, contentDescription = "Skip forward") }
+                }
+            }
         }
 
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onPlayPause) { Text(if (media?.playerState == "PLAYING") "Pause" else "Play") }
-            Button(onClick = onStopMedia) { Text("Stop") }
-        }
-
-        // Skip by a chosen amount: ‹ back — slider (30s..20min) — value — forward ›.
-        Row(
-            Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedButton(onClick = { onSeek(((media?.currentTime ?: 0.0) - skipSeconds).coerceAtLeast(0.0)) }) { Text("‹") }
+        // ── Volume ───────────────────────────────────────────────────────────
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Slider(
-                value = skipSeconds,
-                onValueChange = { skipSeconds = it },
-                valueRange = 30f..1200f,
-                steps = 38, // 30s increments across the range
+                value = (receiver?.volumeLevel ?: 0.0).toFloat(),
+                onValueChange = { onVolume(it.toDouble()) },
+                valueRange = 0f..1f,
                 modifier = Modifier.weight(1f),
             )
-            Text(formatSkip(skipSeconds.toInt()), Modifier.width(52.dp), textAlign = TextAlign.Center)
-            OutlinedButton(onClick = { onSeek((media?.currentTime ?: 0.0) + skipSeconds) }) { Text("›") }
+            val muted = receiver?.muted == true
+            IconToggleButton(checked = muted, onCheckedChange = { onMuted(it) }) {
+                Icon(
+                    if (muted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                    contentDescription = if (muted) "Unmute" else "Mute",
+                )
+            }
         }
 
-        Text("Volume", Modifier.padding(top = 16.dp))
-        Slider(
-            value = (receiver?.volumeLevel ?: 0.0).toFloat(),
-            onValueChange = { onVolume(it.toDouble()) },
-            valueRange = 0f..1f,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { onMuted(true) }) { Text("Mute") }
-            OutlinedButton(onClick = { onMuted(false) }) { Text("Unmute") }
-            OutlinedButton(onClick = onStopApp) { Text("Stop app") }
-        }
+        HorizontalDivider()
 
+        // ── Cast something ───────────────────────────────────────────────────
         OutlinedTextField(
             value = url,
             onValueChange = { url = it },
             label = { Text("Media URL or link") },
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+            modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
-        Button(
-            onClick = { if (url.isNotBlank()) onCast(url) },
-            modifier = Modifier.padding(top = 8.dp),
-        ) { Text("Cast") }
+        Button(onClick = { if (url.isNotBlank()) onCast(url) }) {
+            Icon(Icons.Default.Cast, contentDescription = null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Cast")
+        }
 
         when (val status = castStatus) {
             CastStatus.Idle -> {}
-            CastStatus.Resolving -> Text("Resolving…", Modifier.padding(top = 8.dp))
-            is CastStatus.Error -> Text(
-                status.message,
-                Modifier.padding(top = 8.dp),
-                color = MaterialTheme.colorScheme.error,
-            )
+            CastStatus.Resolving -> Text("Resolving…")
+            is CastStatus.Error -> Text(status.message, color = MaterialTheme.colorScheme.error)
         }
 
-        HistorySection(
-            entries = history,
-            onCast = onCast,
-            onClear = onClearHistory,
-            modifier = Modifier.padding(top = 16.dp),
-        )
+        HistorySection(entries = history, onCast = onCast, onClear = onClearHistory)
 
-        Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // YouTube account row.
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.Default.SmartDisplay, contentDescription = null)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (youTubeSignedIn) "YouTube — signed in ✓" else "YouTube account",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    if (youTubeSignedIn) "Casting ad-free" else "Sign in to cast ad-free",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (youTubeSignedIn) {
-                Text("YouTube: signed in ✓", Modifier.weight(1f).padding(top = 12.dp))
                 OutlinedButton(onClick = onYouTubeSignOut) { Text("Sign out") }
             } else {
-                Text("YouTube ads?", Modifier.weight(1f).padding(top = 12.dp))
-                OutlinedButton(onClick = onYouTubeSignIn) { Text("Sign in for ad-free") }
+                OutlinedButton(onClick = onYouTubeSignIn) { Text("Sign in") }
             }
+        }
+
+        HorizontalDivider()
+
+        // Destructive action, kept away from the transport/volume controls.
+        TextButton(
+            onClick = onStopApp,
+            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+        ) {
+            Icon(Icons.Default.PowerSettingsNew, contentDescription = null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Stop app on TV")
         }
     }
 }

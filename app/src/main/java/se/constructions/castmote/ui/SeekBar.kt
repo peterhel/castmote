@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -13,7 +16,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -65,6 +71,16 @@ fun SeekBar(
 
     val position = if (dragging) dragValue.toDouble() else ticked.coerceIn(0.0, if (hasDuration) dur else ticked)
 
+    // Live streams have no duration: a disabled slider just looks broken, so show the elapsed
+    // time and a LIVE badge instead.
+    if (!hasDuration) {
+        Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            LiveBadge()
+            Text(formatTime(position), style = MaterialTheme.typography.labelMedium)
+        }
+        return
+    }
+
     Column(modifier.fillMaxWidth()) {
         Slider(
             value = position.toFloat(),
@@ -76,15 +92,21 @@ fun SeekBar(
                 dragging = false
                 onSeek(dragValue.toDouble())
             },
-            valueRange = 0f..(if (hasDuration) dur.toFloat() else 1f),
-            enabled = hasDuration,
+            valueRange = 0f..dur.toFloat(),
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatTime(position), style = MaterialTheme.typography.labelMedium)
-            Text(
-                if (hasDuration) formatTime(dur) else "live",
-                style = MaterialTheme.typography.labelMedium,
-            )
+            Text(formatTime(dur), style = MaterialTheme.typography.labelMedium)
         }
+    }
+}
+
+@Composable
+private fun LiveBadge() {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        androidx.compose.foundation.layout.Box(
+            Modifier.size(8.dp).background(Color(0xFFE53935), CircleShape),
+        )
+        Text("LIVE", style = MaterialTheme.typography.labelMedium, color = Color(0xFFE53935))
     }
 }

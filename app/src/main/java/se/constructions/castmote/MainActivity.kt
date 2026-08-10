@@ -6,6 +6,10 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.SettingsRemote
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -55,11 +59,13 @@ class MainActivity : ComponentActivity() {
                             NavigationBar {
                                 NavigationBarItem(
                                     selected = tab == 0, onClick = { tab = 0 },
-                                    icon = {}, label = { Text("Remote") },
+                                    icon = { Icon(Icons.Default.SettingsRemote, contentDescription = null) },
+                                    label = { Text("Remote") },
                                 )
                                 NavigationBarItem(
                                     selected = tab == 1, onClick = { tab = 1 },
-                                    icon = {}, label = { Text("Browser") },
+                                    icon = { Icon(Icons.Default.Language, contentDescription = null) },
+                                    label = { Text("Browser") },
                                 )
                             }
                         },

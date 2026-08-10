@@ -15,20 +15,32 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Button
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import se.constructions.castmote.browser.CastWebViewClient
@@ -67,8 +79,14 @@ fun BrowserScreen(
 ) {
     val currentOnPage by rememberUpdatedState(onPage)
     var webView by remember { mutableStateOf<WebView?>(null) }
-    var address by remember { mutableStateOf("https://") }
+    var address by remember { mutableStateOf(TextFieldValue("")) }
+    var loadProgress by remember { mutableIntStateOf(0) } // 0..100, fed by onProgressChanged
     var canGoBack by remember { mutableStateOf(false) }
+
+    fun openUrl(raw: String) {
+        val a = raw.trim()
+        if (a.isNotEmpty()) webView?.loadUrl(normalizeUrl(a))
+    }
     // Cast flow: 0 = closed, 1 = pick stream (intercept, multiple), 2 = pick device.
     var castStep by remember { mutableStateOf(0) }
     var chosenStream by remember { mutableStateOf<DetectedStream?>(null) }
@@ -87,29 +105,36 @@ fun BrowserScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SHORTCUTS.forEach { s ->
-                    FaviconImage(
-                        host = s.host,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clickable { address = s.url; webView?.loadUrl(s.url) },
-                    )
+                    Box(
+                        Modifier
+                            .size(48.dp)
+                            .clickable { address = TextFieldValue(s.url); webView?.loadUrl(s.url) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        FaviconImage(host = s.host, modifier = Modifier.size(32.dp))
+                    }
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-                OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it },
-                    singleLine = true,
-                    label = { Text("Address") },
-                    modifier = Modifier.weight(1f),
+            OutlinedTextField(
+                value = address,
+                onValueChange = { address = it },
+                singleLine = true,
+                label = { Text("Search or type a URL") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = { openUrl(address.text) }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    // Select-all when the field gains focus so a tap-to-edit replaces the URL
+                    // instead of forcing the user to clear it by hand.
+                    .onFocusChanged { if (it.isFocused) address = address.copy(selection = TextRange(0, address.text.length)) },
+            )
+            // Page-load progress: only while actually loading (WebView reports 0..100).
+            if (loadProgress in 1..99) {
+                LinearProgressIndicator(
+                    progress = { loadProgress / 100f },
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                Button(
-                    onClick = {
-                        val a = address.trim()
-                        if (a.isNotBlank() && a != "https://") webView?.loadUrl(normalizeUrl(a))
-                    },
-                    modifier = Modifier.padding(start = 8.dp),
-                ) { Text("Go") }
             }
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -129,7 +154,7 @@ fun BrowserScreen(
                         val client = object : CastWebViewClient(sniffer) {
                             override fun onPageStarted(v: WebView?, url: String?, f: android.graphics.Bitmap?) {
                                 currentOnPage(url.orEmpty())
-                                if (!url.isNullOrEmpty()) address = url
+                                if (!url.isNullOrEmpty()) address = TextFieldValue(url)
                                 canGoBack = v?.canGoBack() == true
                                 super.onPageStarted(v, url, f)
                             }
@@ -147,7 +172,7 @@ fun BrowserScreen(
                                 super.doUpdateVisitedHistory(v, url, isReload)
                                 if (!url.isNullOrEmpty()) {
                                     currentOnPage(url)
-                                    address = url
+                                    address = TextFieldValue(url)
                                 }
                                 canGoBack = v?.canGoBack() == true
                             }
@@ -156,6 +181,9 @@ fun BrowserScreen(
                         // Handle "new window" requests by loading the target in this same WebView,
                         // so menu items / target=_blank links navigate instead of vanishing.
                         webChromeClient = object : android.webkit.WebChromeClient() {
+                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                loadProgress = newProgress
+                            }
                             override fun onCreateWindow(
                                 view: WebView?,
                                 isDialog: Boolean,
@@ -199,7 +227,9 @@ fun BrowserScreen(
                             castStep = 2
                         }
                     },
-                ) { Text(if (streams.size > 1) "Cast ▶ (${streams.size})" else "Cast ▶") }
+                    icon = { Icon(Icons.Default.Cast, contentDescription = null) },
+                    text = { Text(if (streams.size > 1) "Cast (${streams.size})" else "Cast") },
+                )
 
                 // Step 1 — choose which sniffed stream (intercept path with several).
                 DropdownMenu(expanded = castStep == 1, onDismissRequest = { castStep = 0 }) {
@@ -220,7 +250,8 @@ fun BrowserScreen(
                     }
                     devices.forEach { d ->
                         DropdownMenuItem(
-                            text = { Text("📺  ${d.friendlyName}") },
+                            text = { Text(d.friendlyName) },
+                            leadingIcon = { Icon(Icons.Default.Tv, contentDescription = null) },
                             onClick = { castStep = 0; onCast(d, chosenStream) },
                         )
                     }
