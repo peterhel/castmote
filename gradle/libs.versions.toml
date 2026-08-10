@@ -1,0 +1,37 @@
+[versions]
+agp = "8.5.2"
+kotlin = "2.0.20"
+coroutines = "1.8.1"
+serialization = "1.7.1"
+lifecycle = "2.8.5"
+activityCompose = "1.9.2"
+composeBom = "2024.09.02"
+wire = "5.0.0"
+jmdns = "3.5.9"
+junit = "4.13.2"
+youtubedl = "0.18.1"
+
+[libraries]
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+wire-runtime = { module = "com.squareup.wire:wire-runtime", version.ref = "wire" }
+jmdns = { module = "org.jmdns:jmdns", version.ref = "jmdns" }
+junit = { module = "junit:junit", version.ref = "junit" }
+youtubedl-android = { module = "io.github.junkfood02.youtubedl-android:library", version.ref = "youtubedl" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+wire = { id = "com.squareup.wire", version.ref = "wire" }
