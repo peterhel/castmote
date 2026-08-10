@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -19,12 +20,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import se.constructions.castmote.controller.MediaStatus
 import se.constructions.castmote.controller.ReceiverStatus
 import se.constructions.castmote.discovery.CastDevice
 import se.constructions.castmote.history.HistoryEntry
+
+/** Compact label for a skip step: "30s", "1m30s", "10m", "20m". */
+internal fun formatSkip(seconds: Int): String {
+    val m = seconds / 60
+    val s = seconds % 60
+    return when {
+        m == 0 -> "${s}s"
+        s == 0 -> "${m}m"
+        else -> "${m}m${s}s"
+    }
+}
 
 @Composable
 fun ControlScreen(
@@ -49,6 +63,7 @@ fun ControlScreen(
     onYouTubeSignOut: () -> Unit,
 ) {
     var url by remember { mutableStateOf("") }
+    var skipSeconds by remember { mutableStateOf(30f) } // skip step chosen by the slider, 30s..20min
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         OutlinedButton(onClick = onBack) { Text("‹ Devices") }
@@ -85,8 +100,24 @@ fun ControlScreen(
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onPlayPause) { Text(if (media?.playerState == "PLAYING") "Pause" else "Play") }
             Button(onClick = onStopMedia) { Text("Stop") }
-            Button(onClick = { onSeek(((media?.currentTime ?: 0.0) + 30).coerceAtLeast(0.0)) }) { Text("+30s") }
-            Button(onClick = { onSeek(((media?.currentTime ?: 0.0) - 30).coerceAtLeast(0.0)) }) { Text("-30s") }
+        }
+
+        // Skip by a chosen amount: ‹ back — slider (30s..20min) — value — forward ›.
+        Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(onClick = { onSeek(((media?.currentTime ?: 0.0) - skipSeconds).coerceAtLeast(0.0)) }) { Text("‹") }
+            Slider(
+                value = skipSeconds,
+                onValueChange = { skipSeconds = it },
+                valueRange = 30f..1200f,
+                steps = 38, // 30s increments across the range
+                modifier = Modifier.weight(1f),
+            )
+            Text(formatSkip(skipSeconds.toInt()), Modifier.width(52.dp), textAlign = TextAlign.Center)
+            OutlinedButton(onClick = { onSeek((media?.currentTime ?: 0.0) + skipSeconds) }) { Text("›") }
         }
 
         Text("Volume", Modifier.padding(top = 16.dp))
