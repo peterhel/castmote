@@ -12,7 +12,7 @@ class CasterRegistry(
         /** v1 registry: known native-host strategies first, InterceptCaster as the default. */
         fun default(probe: se.constructions.castmote.resolver.HlsProbe = se.constructions.castmote.resolver.DefaultHlsProbe) =
             CasterRegistry(
-                strategies = listOf(YouTubeCaster()),
+                strategies = listOf(YouTubeCaster(), SvtCaster()),
                 fallback = InterceptCaster(probe),
             )
     }

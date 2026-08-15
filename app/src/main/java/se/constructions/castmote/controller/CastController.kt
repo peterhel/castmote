@@ -127,12 +127,14 @@ class CastController(
      */
     suspend fun castSvt(playId: String, startSeconds: Int = 0) {
         val resolved = se.constructions.castmote.resolver.SvtVideo.resolve(playId)
+        android.util.Log.i("CastmoteYT", "castSvt resolved: title=${resolved.title} dittoLen=${resolved.dittoUrl.length}")
         val transportId = ensureMediaApp(CastIds.SVT_RECEIVER)
             ?: throw se.constructions.castmote.resolver.SvtException("Couldn't launch SVT on the TV")
+        android.util.Log.i("CastmoteYT", "castSvt transport=$transportId")
         val resp = connection.request(Namespaces.MEDIA, transportId) {
             Payloads.loadSvt(it, playId, resolved.dittoUrl, resolved.title, startSeconds.toDouble(), resolved.response)
         }
-        android.util.Log.i("CastmoteYT", "SVT LOAD @${startSeconds}s response: ${resp.toString().take(200)}")
+        android.util.Log.i("CastmoteYT", "SVT LOAD @${startSeconds}s response: ${resp.toString().take(300)}")
     }
 
     /** Launches YouTube's receiver and plays [videoId] via the lounge protocol. */

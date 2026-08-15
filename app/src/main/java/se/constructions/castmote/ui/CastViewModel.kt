@@ -339,6 +339,7 @@ class CastViewModel(app: Application) : AndroidViewModel(app) {
         // SVT: prefer relaunching into SVT's own app (subtitles / next-episode / DRM). If the
         // RE-based interop breaks, fall through to the default-receiver yt-dlp path (DRM-free only).
         SvtVideo.parsePlayId(url)?.let { playId ->
+            android.util.Log.i("CastmoteYT", "native SVT attempt: playId=$playId resumeAt=$resumeAt url=$url")
             _castStatus.value = CastStatus.Resolving
             try {
                 castWithReconnect { it.castSvt(playId, resumeAt ?: 0) }
