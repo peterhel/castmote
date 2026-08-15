@@ -353,6 +353,28 @@ class CastViewModel(app: Application) : AndroidViewModel(app) {
                 android.util.Log.w("CastmoteYT", "native SVT cast failed (${e.javaClass.simpleName}: ${e.message}); using default receiver")
             }
         }
+        // YouTube: prefer the native YouTube app (real UI / captions / playlists / next video;
+        // ad-free when a Premium account is signed in). If the lounge handshake fails, fall through
+        // to the yt-dlp path below, which plays the raw progressive stream on the default receiver
+        // (inherently ad-free).
+        if (YouTubeUrl.isYouTubeUrl(url)) {
+            YouTubeUrl.parseVideoId(url)?.let { videoId ->
+                android.util.Log.i("CastmoteYT", "native YouTube attempt: videoId=$videoId resumeAt=$resumeAt")
+                _castStatus.value = CastStatus.Resolving
+                try {
+                    val start = resumeAt ?: YouTubeUrl.parseStartSeconds(url)
+                    castWithReconnect { it.castYouTube(videoId, start, youTubeAuth.authHeaders()) }
+                    recordHistory(url, null)
+                    startedCastUrl = url
+                    _castStatus.value = CastStatus.Idle
+                    return
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    android.util.Log.w("CastmoteYT", "native YouTube cast failed (${e.javaClass.simpleName}: ${e.message}); using default receiver")
+                }
+            }
+        }
         if (castUrlUseCase.needsResolving(url)) _castStatus.value = CastStatus.Resolving
         when (val r = castUrlUseCase.prepare(url)) {
             is CastUrlUseCase.Result.Ready -> {
