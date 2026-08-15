@@ -87,6 +87,7 @@ fun ControlScreen(
     onMuted: (Boolean) -> Unit,
     onStopApp: () -> Unit,
     onCast: (String) -> Unit,
+    onCastEntry: (HistoryEntry) -> Unit,
     onClearHistory: () -> Unit,
     onYouTubeSignIn: () -> Unit,
     onYouTubeSignOut: () -> Unit,
@@ -234,7 +235,7 @@ fun ControlScreen(
             is CastStatus.Error -> Text(status.message, color = MaterialTheme.colorScheme.error)
         }
 
-        HistorySection(entries = history, onCast = onCast, onClear = onClearHistory)
+        HistorySection(entries = history, onCast = onCastEntry, onClear = onClearHistory)
 
         // YouTube account row.
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

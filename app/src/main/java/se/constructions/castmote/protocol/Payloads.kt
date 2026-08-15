@@ -1,5 +1,6 @@
 package se.constructions.castmote.protocol
 
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -90,6 +91,46 @@ object Payloads {
                 putJsonObject("metadata") {
                     put("metadataType", 0)
                     if (title != null) put("title", title)
+                }
+            }
+        }.toString()
+
+    /**
+     * LOAD for SVT's own receiver (app 95370A1C): contentId is the play-id, contentUrl the ditto
+     * manifest, and customData carries the full videoplayer-api [response] plus the web-sender
+     * identity SVT's receiver expects. currentTime seeks to the resume point.
+     */
+    fun loadSvt(
+        requestId: Int,
+        playId: String,
+        dittoUrl: String,
+        title: String?,
+        currentTime: Double,
+        response: JsonObject,
+    ): String =
+        buildJsonObject {
+            put("type", "LOAD")
+            put("requestId", requestId)
+            put("autoplay", true)
+            if (currentTime > 0) put("currentTime", currentTime)
+            putJsonObject("media") {
+                put("contentId", playId)
+                put("contentUrl", dittoUrl)
+                put("contentType", "application/vnd.apple.mpegurl")
+                put("streamType", "BUFFERED")
+                putJsonObject("metadata") {
+                    put("metadataType", 0)
+                    if (title != null) put("title", title)
+                }
+            }
+            putJsonObject("customData") {
+                put("response", response)
+                putJsonObject("sender") {
+                    put("platform", "web")
+                    put("playerName", "svtlib-videoplayer-web")
+                    put("playerVersion", "32.2.1")
+                    put("productFamily", "play")
+                    put("productName", "svtplay")
                 }
             }
         }.toString()

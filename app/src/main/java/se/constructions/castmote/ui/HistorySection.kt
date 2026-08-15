@@ -17,11 +17,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import se.constructions.castmote.history.HistoryEntry
 
-/** The "Recent" list: tap an entry to cast it again. */
+/** The "Recent" list: tap an entry to cast it again (resuming where you left off). */
 @Composable
 fun HistorySection(
     entries: List<HistoryEntry>,
-    onCast: (String) -> Unit,
+    onCast: (HistoryEntry) -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -39,7 +39,7 @@ fun HistorySection(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clickable { onCast(entry.url) }
+                    .clickable { onCast(entry) }
                     .padding(vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -53,7 +53,7 @@ fun HistorySection(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        entry.host,
+                        entry.positionSeconds?.let { "${entry.host} · resume ${formatTime(it.toDouble())}" } ?: entry.host,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

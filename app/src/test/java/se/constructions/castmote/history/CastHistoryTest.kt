@@ -38,6 +38,25 @@ class CastHistoryTest {
         assertEquals(CastHistory.MAX, history(store).entries().size)
     }
 
+    @Test fun updatePositionPatchesInPlaceWithoutReordering() {
+        val store = MemStore()
+        history(store, 1).add("https://a.com/1", "A")
+        history(store, 2).add("https://b.com/2", "B")
+        history(store).updatePosition("https://a.com/1", 742)
+        val entries = history(store).entries()
+        assertEquals(listOf("https://b.com/2", "https://a.com/1"), entries.map { it.url }) // order unchanged
+        assertEquals(742, entries.first { it.url == "https://a.com/1" }.positionSeconds)
+        assertEquals(null, entries.first { it.url == "https://b.com/2" }.positionSeconds)
+    }
+
+    @Test fun updatePositionIgnoresUnknownUrl() {
+        val store = MemStore()
+        history(store).add("https://a.com/1", "A")
+        val before = store.value
+        history(store).updatePosition("https://missing.com", 10)
+        assertEquals(before, store.value) // no write
+    }
+
     @Test fun clearEmptiesHistory() {
         val store = MemStore()
         history(store).add("https://a.com/1", "A")

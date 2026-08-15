@@ -13,4 +13,5 @@ object CastIds {
     const val RECEIVER = "receiver-0"
     const val DEFAULT_MEDIA_RECEIVER = "CC1AD845"
     const val YOUTUBE_RECEIVER = "233637DE"
+    const val SVT_RECEIVER = "95370A1C"
 }

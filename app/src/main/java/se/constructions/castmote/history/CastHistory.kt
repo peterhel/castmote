@@ -14,6 +14,8 @@ data class HistoryEntry(
     val title: String? = null,
     val host: String,
     val timestamp: Long,
+    /** Last-seen playback position, so tapping the entry resumes instead of restarting. */
+    val positionSeconds: Int? = null,
 )
 
 /** Persists the serialized history (so Recent survives restarts). */
@@ -48,6 +50,16 @@ class CastHistory(
         )
         val updated = (listOf(entry) + entries().filterNot { it.url == url }).take(MAX)
         store.set(json.encodeToString(updated))
+    }
+
+    /**
+     * Records where playback of [url] currently is, in place (no reordering), so the entry can
+     * later resume. No-op if the url isn't in history or the write wouldn't change anything.
+     */
+    fun updatePosition(url: String, seconds: Int) {
+        val current = entries()
+        val updated = current.map { if (it.url == url) it.copy(positionSeconds = seconds) else it }
+        if (updated != current) store.set(json.encodeToString(updated))
     }
 
     fun clear() = store.set(null)

@@ -30,9 +30,13 @@ import se.constructions.castmote.caster.CastSink
 import se.constructions.castmote.caster.CasterRegistry
 import se.constructions.castmote.caster.InterceptCaster
 import se.constructions.castmote.history.CastHistory
+import se.constructions.castmote.media.MediaControlService
+import se.constructions.castmote.media.NowPlaying
+import se.constructions.castmote.protocol.CastIds
 import se.constructions.castmote.history.HistoryEntry
 import se.constructions.castmote.history.PrefsHistoryStore
 import se.constructions.castmote.resolver.CastUrlUseCase
+import se.constructions.castmote.resolver.SvtVideo
 import se.constructions.castmote.resolver.YtDlpStreamResolver
 import se.constructions.castmote.youtube.PrefsCookieStore
 import se.constructions.castmote.youtube.YouTubeAuth
@@ -110,6 +114,40 @@ class CastViewModel(app: Application) : AndroidViewModel(app) {
     fun openYouTubeLogin() { _showYouTubeLogin.value = true }
     fun closeYouTubeLogin() { _showYouTubeLogin.value = false }
 
+    // --- Lock-screen / notification media control ---
+    // Publish the current cast to NowPlaying (the MediaControlService renders it) and route the
+    // notification's transport taps back to the live controller.
+    private var mediaServiceStarted = false
+
+    init {
+        NowPlaying.onPlayPause = { playPause() }
+        NowPlaying.onSeekTo = { ms -> seek(ms / 1000.0) }
+        NowPlaying.onStop = { stopMedia() }
+        viewModelScope.launch {
+            combine(media, receiver, connected) { m, r, c ->
+                c?.let { NowPlaying.playback(m, r, it.friendlyName) }
+            }.collect { s ->
+                NowPlaying.state.value = s
+                if (s != null && !mediaServiceStarted) {
+                    android.util.Log.i("CastmoteYT", "NowPlaying -> starting MediaControlService (title=${s.title} playing=${s.isPlaying})")
+                    runCatching { MediaControlService.start(getApplication()) }
+                        .onFailure { android.util.Log.e("CastmoteYT", "MediaControlService.start failed (${it.javaClass.simpleName}: ${it.message})") }
+                    mediaServiceStarted = true
+                } else if (s == null) {
+                    mediaServiceStarted = false // the service self-stops when state goes null
+                }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        NowPlaying.onPlayPause = null
+        NowPlaying.onSeekTo = null
+        NowPlaying.onStop = null
+        NowPlaying.state.value = null
+        super.onCleared()
+    }
+
     // --- In-app browser cast ---
     val streamSniffer = StreamSniffer()
     private val casterRegistry = CasterRegistry.default()
@@ -166,7 +204,13 @@ class CastViewModel(app: Application) : AndroidViewModel(app) {
                 when (casterRegistry.resolve(host).cast(CastRequest(page, host, streams), castSink)) {
                     is CastOutcome.NothingCastable -> toast("Nothing to cast on this page")
                     is CastOutcome.Failed -> toast("Cast failed")
-                    is CastOutcome.Cast -> {}
+                    is CastOutcome.Cast -> {
+                        // Record the *page* URL (not the sniffed, short-lived stream) so Recent can
+                        // relaunch it later and skip to the saved position — e.g. resume an SVT
+                        // episode. Resume re-resolves via yt-dlp (works for DRM-free SVT/YouTube/etc).
+                        recordHistory(page, null)
+                        startedCastUrl = page
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -199,7 +243,7 @@ class CastViewModel(app: Application) : AndroidViewModel(app) {
         _connected.value = device
         _online.value = true
         collectorJobs += viewModelScope.launch { c.receiver.collect { _receiver.value = it } }
-        collectorJobs += viewModelScope.launch { c.media.collect { _media.value = it } }
+        collectorJobs += viewModelScope.launch { c.media.collect { _media.value = it; trackPosition(it) } }
         collectorJobs += viewModelScope.launch { c.connected.collect { _online.value = it } }
         android.util.Log.i("CastmoteYT", "connecting socket to ${device.host}:${device.port}")
         c.connect()
@@ -269,11 +313,16 @@ class CastViewModel(app: Application) : AndroidViewModel(app) {
     fun setVolume(level: Double) = withController { it.setVolume(level) }
     fun setMuted(muted: Boolean) = withController { it.setMuted(muted) }
     fun stopApp() = withController { it.stopApp() }
-    fun castUrl(url: String) {
+
+    fun castUrl(url: String) = launchCast(url, null)
+    /** Resume a Recent entry: same app + stream, continuing from its saved position. */
+    fun castEntry(entry: HistoryEntry) = launchCast(entry.url, entry.positionSeconds)
+
+    private fun launchCast(url: String, resumeAt: Int?) {
         if (_connected.value == null) return
         viewModelScope.launch {
             try {
-                doCastUrl(url)
+                doCastUrl(url, resumeAt)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: YouTubeException) {
@@ -286,7 +335,23 @@ class CastViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private suspend fun doCastUrl(url: String) {
+    private suspend fun doCastUrl(url: String, resumeAt: Int? = null) {
+        // SVT: prefer relaunching into SVT's own app (subtitles / next-episode / DRM). If the
+        // RE-based interop breaks, fall through to the default-receiver yt-dlp path (DRM-free only).
+        SvtVideo.parsePlayId(url)?.let { playId ->
+            _castStatus.value = CastStatus.Resolving
+            try {
+                castWithReconnect { it.castSvt(playId, resumeAt ?: 0) }
+                recordHistory(url, null)
+                startedCastUrl = url
+                _castStatus.value = CastStatus.Idle
+                return
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("CastmoteYT", "native SVT cast failed (${e.javaClass.simpleName}: ${e.message}); using default receiver")
+            }
+        }
         if (castUrlUseCase.needsResolving(url)) _castStatus.value = CastStatus.Resolving
         when (val r = castUrlUseCase.prepare(url)) {
             is CastUrlUseCase.Result.Ready -> {
@@ -294,13 +359,15 @@ class CastViewModel(app: Application) : AndroidViewModel(app) {
                 // This receiver can't sustain live HLS, so a live YouTube stream is cast via
                 // the native YouTube app (lounge) instead of the raw stream. VOD stays on the
                 // ad-free raw-stream path.
+                val startSeconds = resumeAt ?: r.startSeconds
                 val liveYouTubeId = if (r.isLive) YouTubeUrl.parseVideoId(url) else null
                 if (liveYouTubeId != null) {
-                    castWithReconnect { it.castYouTube(liveYouTubeId, 0, youTubeAuth.authHeaders()) }
+                    castWithReconnect { it.castYouTube(liveYouTubeId, startSeconds, youTubeAuth.authHeaders()) }
                 } else {
-                    castWithReconnect { it.castUrl(r.streamUrl, r.contentType, r.title, r.startSeconds, r.isLive, r.hlsFmp4) }
+                    castWithReconnect { it.castUrl(r.streamUrl, r.contentType, r.title, startSeconds, r.isLive, r.hlsFmp4) }
                 }
                 recordHistory(url, r.title)
+                startedCastUrl = url
                 _castStatus.value = CastStatus.Idle
             }
             is CastUrlUseCase.Result.Failed ->
@@ -315,6 +382,50 @@ class CastViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun recordHistory(url: String, title: String?) {
         castHistory.add(url, title)
+        _history.value = castHistory.entries()
+    }
+
+    // Resume tracking. startedCastUrl is the page URL of a cast *Castmote* initiated (its media
+    // contentId is an opaque stream URL, so we can't derive the page from it — we remember it).
+    // trackedContentId guards against bleeding one video's position onto another when the session
+    // changes. lastPersistedPos throttles writes.
+    private var startedCastUrl: String? = null
+    private var trackedContentId: String? = null
+    private var lastPersistedPos = -100
+
+    /**
+     * A relaunchable page URL for the current session, or null if we can't resume it. Known
+     * foreign receivers (SVT) expose the play-id as media contentId, which maps straight to a
+     * page URL yt-dlp can re-resolve; our own casts fall back to the URL we launched.
+     */
+    private fun resumeUrlFor(receiver: ReceiverStatus?, media: MediaStatus): String? =
+        when (receiver?.appId) {
+            CastIds.SVT_RECEIVER -> media.contentId?.let { "https://www.svtplay.se/video/$it" }
+            else -> startedCastUrl
+        }
+
+    /**
+     * Persists playback position onto a Recent entry so a tap later relaunches and skips to it.
+     * Auto-registers a foreign session (e.g. SVT started from the SVT app) the first time we see
+     * it, then tracks it — Castmote reads the position off the receiver over the standard media
+     * namespace even for a cast it didn't start.
+     */
+    private fun trackPosition(m: MediaStatus?) {
+        if (m == null || m.playerState != "PLAYING") return
+        val url = resumeUrlFor(_receiver.value, m) ?: return
+        // A new session = a new, non-null contentId. The default receiver drops the `media` block
+        // (contentId=null) on plain progress polls, so ignoring null avoids re-registering every tick.
+        val cid = m.contentId
+        if (cid != null && cid != trackedContentId) {
+            trackedContentId = cid
+            lastPersistedPos = -100
+            if (castHistory.entries().none { it.url == url }) recordHistory(url, m.title)
+        }
+        val secs = m.currentTime.toInt()
+        // ponytail: skip the first 10s (not worth a "resume 0:03") and throttle to 5s steps.
+        if (secs < 10 || kotlin.math.abs(secs - lastPersistedPos) < 5) return
+        lastPersistedPos = secs
+        castHistory.updatePosition(url, secs)
         _history.value = castHistory.entries()
     }
 

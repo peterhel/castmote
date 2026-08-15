@@ -120,6 +120,21 @@ class CastController(
         android.util.Log.i("CastmoteYT", "LOAD($streamType fmp4=$hlsFmp4) response: ${resp.toString().take(240)}")
     }
 
+    /**
+     * Relaunches SVT's own receiver (app 95370A1C) and loads [playId], seeking to [startSeconds].
+     * RE-based interop — throws [se.constructions.castmote.resolver.SvtException] on any API/protocol
+     * change; the caller falls back to the default media receiver.
+     */
+    suspend fun castSvt(playId: String, startSeconds: Int = 0) {
+        val resolved = se.constructions.castmote.resolver.SvtVideo.resolve(playId)
+        val transportId = ensureMediaApp(CastIds.SVT_RECEIVER)
+            ?: throw se.constructions.castmote.resolver.SvtException("Couldn't launch SVT on the TV")
+        val resp = connection.request(Namespaces.MEDIA, transportId) {
+            Payloads.loadSvt(it, playId, resolved.dittoUrl, resolved.title, startSeconds.toDouble(), resolved.response)
+        }
+        android.util.Log.i("CastmoteYT", "SVT LOAD @${startSeconds}s response: ${resp.toString().take(200)}")
+    }
+
     /** Launches YouTube's receiver and plays [videoId] via the lounge protocol. */
     suspend fun castYouTube(videoId: String, startSeconds: Int = 0, authHeaders: Map<String, String>? = null) {
         // A freshly-launched YouTube app reports a screenId immediately, but its screen isn't

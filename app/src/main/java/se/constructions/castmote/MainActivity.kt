@@ -1,8 +1,12 @@
 package se.constructions.castmote
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -34,6 +38,13 @@ import se.constructions.castmote.ui.theme.CastmoteTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Lock-screen media control posts a notification — ask once on Android 13+.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+                .launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         setContent {
             CastmoteTheme {
                 Surface {
@@ -114,6 +125,7 @@ class MainActivity : ComponentActivity() {
                                         onMuted = vm::setMuted,
                                         onStopApp = vm::stopApp,
                                         onCast = vm::castUrl,
+                                        onCastEntry = vm::castEntry,
                                         onClearHistory = vm::clearHistory,
                                         onYouTubeSignIn = vm::openYouTubeLogin,
                                         onYouTubeSignOut = vm::signOutYouTube,
