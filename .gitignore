@@ -4,3 +4,7 @@ local.properties
 *.iml
 .idea/
 .kotlin/
+
+# Release signing — never commit
+castmote-release.jks
+keystore.properties

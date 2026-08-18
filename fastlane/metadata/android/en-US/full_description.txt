@@ -1,0 +1,16 @@
+Castmote is a lightweight remote for Chromecast. Paste a link — or send one to
+Castmote from another app's share sheet or a castmote:// deep link — and cast it
+to your TV.
+
+Features:
+
+* Cast arbitrary web videos (HLS/DASH), YouTube and SVT Play.
+* YouTube and SVT are handed to their native TV receivers (real UI, captions,
+  next-episode); other links play the raw stream on the default receiver.
+* Built-in browser that sniffs playable streams on the page.
+* Transport controls: play/pause, seek, skip steps, volume.
+* Lock-screen / notification media control.
+* Bookmark and resume casts from where you left off.
+* Sign in to YouTube to cast ad-free.
+
+Stream resolution uses an embedded yt-dlp.

@@ -1,0 +1,1 @@
+First release: cast web/YouTube/SVT links, share-sheet and castmote:// deep links, resume, lock-screen controls.
