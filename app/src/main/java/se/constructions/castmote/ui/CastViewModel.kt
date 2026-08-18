@@ -314,6 +314,24 @@ class CastViewModel(app: Application) : AndroidViewModel(app) {
     fun setMuted(muted: Boolean) = withController { it.setMuted(muted) }
     fun stopApp() = withController { it.stopApp() }
 
+    // An external link (castmote:// deep link / share sheet) waiting to be prefilled into the cast
+    // field. Held until ControlScreen seeds it, so it survives connecting to a device first.
+    private val _pendingUrl = MutableStateFlow<String?>(null)
+    val pendingUrl: StateFlow<String?> = _pendingUrl.asStateFlow()
+    fun consumePendingUrl() { _pendingUrl.value = null }
+
+    /**
+     * A link arrived from outside the app. Prefill it and, if nothing is connected yet, connect to
+     * the last-used Chromecast (top of the saved list) so ControlScreen shows with the URL ready to
+     * cast. No auto-cast — the user taps Cast.
+     */
+    fun onIncomingUrl(url: String) {
+        _pendingUrl.value = url
+        if (_connected.value == null) {
+            manualDevices.entries().firstOrNull()?.let { connect(ManualDevices.toDevice(it.host, it.name)) }
+        }
+    }
+
     fun castUrl(url: String) = launchCast(url, null)
     /** Resume a Recent entry: same app + stream, continuing from its saved position. */
     fun castEntry(entry: HistoryEntry) = launchCast(entry.url, entry.positionSeconds)

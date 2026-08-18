@@ -1,12 +1,15 @@
 package se.constructions.castmote
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -27,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import se.constructions.castmote.ui.BrowserScreen
 import se.constructions.castmote.ui.CastViewModel
 import se.constructions.castmote.ui.ControlScreen
@@ -36,6 +38,21 @@ import se.constructions.castmote.ui.YouTubeLoginScreen
 import se.constructions.castmote.ui.theme.CastmoteTheme
 
 class MainActivity : ComponentActivity() {
+    // Activity-scoped so onCreate/onNewIntent can feed incoming links into the same instance the UI uses.
+    private val vm: CastViewModel by viewModels()
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        intent ?: return
+        IncomingLink.urlFrom(intent.action, intent.dataString, intent.getStringExtra(Intent.EXTRA_TEXT))
+            ?.let { vm.onIncomingUrl(it) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Lock-screen media control posts a notification — ask once on Android 13+.
@@ -48,7 +65,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             CastmoteTheme {
                 Surface {
-                    val vm: CastViewModel = viewModel()
                     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.reconnectIfNeeded() }
                     val devices by vm.devices.collectAsStateWithLifecycle()
                     val connected by vm.connected.collectAsStateWithLifecycle()
@@ -61,7 +77,11 @@ class MainActivity : ComponentActivity() {
                     val history by vm.history.collectAsStateWithLifecycle()
                     val browserCanCast by vm.browserCanCast.collectAsStateWithLifecycle()
                     val browserStreams by vm.browserStreams.collectAsStateWithLifecycle()
+                    val pendingUrl by vm.pendingUrl.collectAsStateWithLifecycle()
                     var tab by remember { mutableIntStateOf(0) } // 0 = Remote, 1 = Browser
+
+                    // An incoming link prefills the Remote tab's cast field — jump there so it's visible.
+                    LaunchedEffect(pendingUrl) { if (pendingUrl != null) tab = 0 }
 
                     val device = connected
 
@@ -129,6 +149,8 @@ class MainActivity : ComponentActivity() {
                                         onClearHistory = vm::clearHistory,
                                         onYouTubeSignIn = vm::openYouTubeLogin,
                                         onYouTubeSignOut = vm::signOutYouTube,
+                                        prefillUrl = pendingUrl,
+                                        onPrefillConsumed = vm::consumePendingUrl,
                                     )
                                 }
                                 }
@@ -138,5 +160,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        handleIntent(intent) // a link that cold-started the app
     }
 }

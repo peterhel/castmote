@@ -43,6 +43,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -91,9 +92,19 @@ fun ControlScreen(
     onClearHistory: () -> Unit,
     onYouTubeSignIn: () -> Unit,
     onYouTubeSignOut: () -> Unit,
+    prefillUrl: String? = null,
+    onPrefillConsumed: () -> Unit = {},
 ) {
     var url by remember { mutableStateOf("") }
     var skipSeconds by remember { mutableIntStateOf(30) } // step chosen by the chips
+
+    // Seed the cast field from an incoming deep link / share, then clear it so it doesn't refill.
+    LaunchedEffect(prefillUrl) {
+        if (!prefillUrl.isNullOrBlank()) {
+            url = prefillUrl
+            onPrefillConsumed()
+        }
+    }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
